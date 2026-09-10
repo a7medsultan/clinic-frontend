@@ -193,7 +193,6 @@ export default function AppointmentFormModal({
             appointment_date: formData.appointment_date,
             appointment_time: formData.appointment_time,
             notes: formData.notes || null,
-            user_id: currentUser?.id || null,
           };
 
       const response = await fetch(url, {
@@ -216,6 +215,8 @@ export default function AppointmentFormModal({
         );
       }
 
+      const createdData = data.data || data;
+
       // Display feedback notifications according to operation response
       showToast(
         isEditMode
@@ -225,7 +226,7 @@ export default function AppointmentFormModal({
           : (lang === "en"
               ? t.appointments.bookingSuccessMsg
               : t.appointments.bookingSuccessMsgAr
-            ).replace("{{queueNumber}}", String(data.queue_number)),
+            ).replace("{{queueNumber}}", String(createdData.queue_number)),
         "success",
       );
 

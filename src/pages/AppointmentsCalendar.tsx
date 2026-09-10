@@ -72,6 +72,11 @@ export default function AppointmentsCalendar() {
   );
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
+  const isFutureDate = useMemo(() => {
+    const today = new Date().toISOString().split("T")[0];
+    return selectedDate > today;
+  }, [selectedDate]);
+
   // Helper for status badge dynamic key mapping
   const getTranslatedStatus = (status: string) => {
     switch (status) {
@@ -108,14 +113,15 @@ export default function AppointmentsCalendar() {
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(
-            errData.details ||
+            errData.message ||
+              errData.details ||
               errData.error ||
               `Server responded with ${response.status}`,
           );
         }
 
         const data = await response.json();
-        setAppointments(data);
+        setAppointments(data.data);
       } catch (err: any) {
         setError(err.message || t.appointments.errSyncGateway);
       } finally {
@@ -342,22 +348,24 @@ export default function AppointmentsCalendar() {
                               <span>{t.actions.viewProfile}</span>
                             </button> */}
 
-                            <button
-                              onClick={() => {
-                                setEditingAppointment(apt);
-                                setIsModalOpen(true);
-                                setActiveDropdownRow(null);
-                              }}
-                              className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-stone-300 hover:bg-slate-50 dark:hover:bg-stone-800 flex items-center gap-2 text-left rtl:text-right"
-                            >
-                              <Edit3 size={14} className="text-slate-400" />
-                              <span>{t.appointments.reschedule}</span>
-                            </button>
+                            {apt.status !== "completed" && apt.status !== "cancelled" && (
+                              <button
+                                onClick={() => {
+                                  setEditingAppointment(apt);
+                                  setIsModalOpen(true);
+                                  setActiveDropdownRow(null);
+                                }}
+                                className="w-full px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-stone-300 hover:bg-slate-50 dark:hover:bg-stone-800 flex items-center gap-2 text-left rtl:text-right"
+                              >
+                                <Edit3 size={14} className="text-slate-400" />
+                                <span>{t.appointments.reschedule}</span>
+                              </button>
+                            )}
 
                             <div className="my-1 border-t border-slate-100 dark:border-stone-800" />
 
                             {/* Quick Status Modifiers */}
-                            {apt.status !== "completed" && (
+                            {apt.status !== "completed" && apt.status !== "cancelled" && !isFutureDate && (
                               <button
                                 onClick={() =>
                                   handleQuickStatusChange(apt.id, "completed")
@@ -369,7 +377,7 @@ export default function AppointmentsCalendar() {
                               </button>
                             )}
 
-                            {apt.status !== "cancelled" && (
+                            {apt.status !== "cancelled" && apt.status !== "completed" && (
                               <button
                                 onClick={() =>
                                   handleQuickStatusChange(apt.id, "cancelled")

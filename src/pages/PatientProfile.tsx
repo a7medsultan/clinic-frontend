@@ -38,7 +38,7 @@ export default function PatientProfile({ patientId, onBack }: PatientProfileProp
 
         if (!response.ok) throw new Error(`${t.profile.errLoadProfile} (Status: ${response.status})`);
         const data = await response.json();
-        setPatient(data);
+        setPatient(data.data);
       } catch (err: any) {
         setError(err.message || t.profile.errLoadProfile);
       } finally {

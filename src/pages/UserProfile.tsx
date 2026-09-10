@@ -15,8 +15,8 @@ interface LocalUserProfile {
   email: string;
   role_name?: string;
   is_active?: number | boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface UserProfileProps {
@@ -48,7 +48,7 @@ export default function UserProfile({ userId, onBack }: UserProfileProps) {
 
         if (!response.ok) throw new Error(`Chart execution error: ${response.status}`);
         const data = await response.json();
-        setUser(data);
+        setUser(data.data);
       } catch (err: any) {
         setError(err.message || 'Failed to initialize clinical profile memory map.');
       } finally {
@@ -197,7 +197,7 @@ export default function UserProfile({ userId, onBack }: UserProfileProps) {
                     <span>{t.common.updatedAt}</span>
                     <span className="font-mono bg-white dark:bg-stone-900 px-2 py-0.5 rounded border border-slate-100 dark:border-stone-800 text-dark-hive dark:text-stone-300 font-bold">
                       {user.updated_at
-                        ? new AppDateTime(user.updated_at).toLocaleDateString(
+                        ? new Date(user.updated_at).toLocaleDateString(
                             lang === "ar" ? "ar-AE" : "en-US",
                             {
                               year: "numeric",

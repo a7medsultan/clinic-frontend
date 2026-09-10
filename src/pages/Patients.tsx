@@ -79,7 +79,7 @@ export default function Patients() {
         if (!response.ok)
           throw new Error(`Server dropped connection: ${response.status}`);
         const data = await response.json();
-        setPatients(data);
+        setPatients(data.data);
       } catch (err: any) {
         setError(err.message || "Failed to sync with clinical server gateway.");
       } finally {
