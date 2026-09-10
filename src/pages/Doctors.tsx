@@ -12,20 +12,24 @@ import {
 } from "@tanstack/react-table";
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
 import type { Doctor } from "../types/doctors";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardList, Edit3, Eye, Loader2, MoreVertical, Search, Trash2, Stethoscope } from "lucide-react";
+import type { Branch } from "../types/branches";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ClipboardList, Edit3, Eye, Loader2, MoreVertical, Search, Trash2, Stethoscope, Building2 } from "lucide-react";
 import DoctorFormModal from "../components/DoctorFormModal";
 import DeleteModal from "../components/DeleteModal";
 import DoctorProfile from "./DoctorProfile"; // Import the missing component
 
 export default function Doctors() {
   const { lang } = useApp();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const t = translations[lang];
 
   const [Doctors, setDoctors] = useState<Doctor[]>([]);
+  const [Branches, setBranches] = useState<Branch[]>([]);
   const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+
+  const [branchFilter, setBranchFilter] = useState<number | "all">("all");
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
@@ -74,6 +78,28 @@ export default function Doctors() {
     };
 
     fetchDoctors();
+  }, [token, refreshTrigger]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL;
+        const response = await fetch(`${baseUrl}/api/branches/access`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        setBranches(data.data || []);
+      } catch {
+        /* ignore branch listing failures */
+      }
+    };
+
+    fetchBranches();
   }, [token, refreshTrigger]);
 
   useEffect(() => {
@@ -161,6 +187,33 @@ export default function Doctors() {
             </div>
           </div>
         ),
+      },
+      {
+        accessorKey: "branch_names",
+        header: t.doctors.branches,
+        cell: ({ row }) => {
+          const names = row.original.branch_names
+            ? row.original.branch_names.split(",").filter(Boolean)
+            : [];
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[220px]">
+              {names.length === 0 && (
+                <span className="text-xs text-slate-400 dark:text-stone-500">
+                  {t.doctors.noBranches}
+                </span>
+              )}
+              {names.map((name, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 rounded-full bg-bee-yellow/10 border border-bee-yellow/30 px-2 py-0.5 text-[11px] font-bold text-honey-gold"
+                >
+                  <Building2 size={11} />
+                  {name}
+                </span>
+              ))}
+            </div>
+          );
+        },
       },
       {
         accessorKey: "is_active",
@@ -286,8 +339,13 @@ export default function Doctors() {
     [lang, t, activeDropdownRow, updatingStatusId],
   );
 
+  const filteredDoctors = useMemo(() => {
+    if (branchFilter === "all") return Doctors;
+    return Doctors.filter((d) => (d.branch_ids || []).includes(branchFilter));
+  }, [Doctors, branchFilter]);
+
   const table = useReactTable({
-    data: Doctors,
+    data: filteredDoctors,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -339,18 +397,54 @@ export default function Doctors() {
 
       {/* CONTROL FILTER DECK */}
       <div className="p-4 bg-white dark:bg-stone-900/40 border border-slate-100 dark:border-stone-800/50 rounded-xl shadow-sm">
-        <div className="relative flex items-center">
-          <Search
-            size={18}
-            className="absolute left-3 rtl:right-3 rtl:left-auto text-slate-400"
-          />
-          <input
-            type="text"
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={t.doctors.searchPlaceholder}
-            className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-2.5 bg-slate-50 dark:bg-dark-hive/40 text-sm border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all"
-          />
+        <div className="relative flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 rtl:right-3 rtl:left-auto text-slate-400"
+            />
+            <input
+              type="text"
+              value={globalFilter ?? ""}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder={t.doctors.searchPlaceholder}
+              className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-2.5 bg-slate-50 dark:bg-dark-hive/40 text-sm border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all"
+            />
+          </div>
+
+          {user?.branch_scope === "all" && Branches.length > 0 && (
+            <div className="relative shrink-0">
+              <Building2
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 rtl:right-3 rtl:left-auto text-slate-400"
+              />
+              <select
+                value={branchFilter}
+                onChange={(e) =>
+                  setBranchFilter(
+                    e.target.value === "all"
+                      ? "all"
+                      : Number(e.target.value),
+                  )
+                }
+                title={t.common.switchBranch}
+                className="w-48 pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-2.5 text-sm bg-slate-50 dark:bg-dark-hive/40 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all font-semibold cursor-pointer"
+              >
+                <option value="all" className="text-dark-hive dark:text-white bg-white dark:bg-stone-900">
+                  {t.common.allBranches}
+                </option>
+                {Branches.map((b) => (
+                  <option
+                    key={b.id}
+                    value={b.id}
+                    className="text-dark-hive dark:text-white bg-white dark:bg-stone-900"
+                  >
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -416,7 +510,7 @@ export default function Doctors() {
             <tbody className="divide-y divide-slate-100 dark:divide-stone-800/40 text-sm font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center">
+                  <td colSpan={6} className="py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-stone-500">
                       <Loader2
                         size={32}
@@ -450,7 +544,7 @@ export default function Doctors() {
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="py-16 text-center text-sm text-slate-400 dark:text-stone-500 font-medium"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -526,6 +620,7 @@ export default function Doctors() {
         }}
         onSuccess={triggerDataReset}
         doctor={editingDoctor}
+        branches={Branches}
       />
 
       {/* DYNAMIC REUSABLE DELETE MODAL */}
