@@ -16,6 +16,7 @@ import {
   UserPlus,
   ClipboardList,
   ShieldCheck,
+  Building2,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -31,20 +32,24 @@ import {
 } from "lucide-react";
 import type { User } from "../types/users";
 import type { Role } from "../types/roles";
+import type { Branch } from "../types/branches";
 import DeleteModal from '../components/DeleteModal';
 import UserFormModal from "../components/UserFormModal";
 import UserProfile from "./UserProfile";
 
 export default function Users() {
   const { lang } = useApp();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const t = translations[lang];
 
   const [Users, setUsers] = useState<User[]>([]);
   const [Roles, setRoles] = useState<Role[]>([]);
+  const [Branches, setBranches] = useState<Branch[]>([]);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>("");
+
+  const [branchFilter, setBranchFilter] = useState<number | "all">("all");
 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
@@ -109,6 +114,29 @@ export default function Users() {
     };
 
     fetchRoles();
+  }, [token, refreshTrigger]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        setError("");
+        const baseUrl = import.meta.env.VITE_API_BASE_URL;
+        const response = await fetch(`${baseUrl}/api/branches/access`, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            ...(token && { Authorization: `Bearer ${token}` }),
+          },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        setBranches(data.data || []);
+      } catch {
+        /* ignore branch listing failures */
+      }
+    };
+
+    fetchBranches();
   }, [token, refreshTrigger]);
 
   useEffect(() => {
@@ -195,6 +223,21 @@ export default function Users() {
             <div className="flex items-center gap-1.5 font-sans text-xs text-slate-600 dark:text-stone-400 font-semibold capitalize">
               <ShieldCheck size={14} className="text-emerald-500" />
               <span>{roleName}</span>
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "branch_id",
+        header: t.users.branch,
+        cell: ({ row }) => {
+          const branchId = row.original.branch_id;
+          const matched = Branches.find((b) => b.id === Number(branchId));
+
+          return (
+            <div className="flex items-center gap-1.5 font-sans text-xs text-slate-600 dark:text-stone-400 font-semibold">
+              <Building2 size={14} className="text-honey-gold" />
+              <span>{matched ? matched.name : t.users.noBranchAssigned}</span>
             </div>
           );
         },
@@ -311,11 +354,16 @@ export default function Users() {
         },
       },
     ],
-    [lang, t, activeDropdownRow, Roles, updatingStatusId],
+    [lang, t, activeDropdownRow, Roles, updatingStatusId, Branches],
   );
 
+  const filteredUsers = useMemo(() => {
+    if (branchFilter === "all") return Users;
+    return Users.filter((u) => Number(u.branch_id) === branchFilter);
+  }, [Users, branchFilter]);
+
   const table = useReactTable({
-    data: Users,
+    data: filteredUsers,
     columns,
     state: { sorting, globalFilter },
     onSortingChange: setSorting,
@@ -367,18 +415,54 @@ export default function Users() {
 
       {/* CONTROL FILTER DECK */}
       <div className="p-4 bg-white dark:bg-stone-900/40 border border-slate-100 dark:border-stone-800/50 rounded-xl shadow-sm">
-        <div className="relative flex items-center">
-          <Search
-            size={18}
-            className="absolute left-3 rtl:right-3 rtl:left-auto text-slate-400"
-          />
-          <input
-            type="text"
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={t.users.searchPlaceholder}
-            className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-2.5 bg-slate-50 dark:bg-dark-hive/40 text-sm border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all"
-          />
+        <div className="relative flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search
+              size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 rtl:right-3 rtl:left-auto text-slate-400"
+            />
+            <input
+              type="text"
+              value={globalFilter ?? ""}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder={t.users.searchPlaceholder}
+              className="w-full pl-10 pr-4 rtl:pr-10 rtl:pl-4 py-2.5 bg-slate-50 dark:bg-dark-hive/40 text-sm border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all"
+            />
+          </div>
+
+          {user?.branch_scope === "all" && Branches.length > 0 && (
+            <div className="relative shrink-0">
+              <Building2
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 rtl:right-3 rtl:left-auto text-slate-400"
+              />
+              <select
+                value={branchFilter}
+                onChange={(e) =>
+                  setBranchFilter(
+                    e.target.value === "all"
+                      ? "all"
+                      : Number(e.target.value),
+                  )
+                }
+                title={t.common.switchBranch}
+                className="w-48 pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-2.5 text-sm bg-slate-50 dark:bg-dark-hive/40 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all font-semibold cursor-pointer"
+              >
+                <option value="all" className="text-dark-hive dark:text-white bg-white dark:bg-stone-900">
+                  {t.common.allBranches}
+                </option>
+                {Branches.map((b) => (
+                  <option
+                    key={b.id}
+                    value={b.id}
+                    className="text-dark-hive dark:text-white bg-white dark:bg-stone-900"
+                  >
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -444,7 +528,7 @@ export default function Users() {
             <tbody className="divide-y divide-slate-100 dark:divide-stone-800/40 text-sm font-medium">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-20 text-center">
+                  <td colSpan={6} className="py-20 text-center">
                     <div className="flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-stone-500">
                       <Loader2
                         size={32}
@@ -478,7 +562,7 @@ export default function Users() {
               ) : (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="py-16 text-center text-sm text-slate-400 dark:text-stone-500 font-medium"
                   >
                     <div className="flex flex-col items-center justify-center gap-2">
@@ -555,6 +639,7 @@ export default function Users() {
         onSuccess={triggerDataReset}
         user={editingUser}
         roles={Roles}
+        branches={Branches}
       />
 
       {/* DYNAMIC REUSABLE DELETE MODAL */}

@@ -7,4 +7,5 @@ export interface Translations {
   passwordLabel: string;
   authButton: string;
   authenticating: string;
+  [key: string]: any;
 }

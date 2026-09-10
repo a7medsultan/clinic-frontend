@@ -2,8 +2,10 @@ import React, { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
+import { useAccessibleBranches } from '../hooks/useAccessibleBranches';
 import { translations } from '../services/translations';
 import beeclinic from '../assets/beeclinic.svg';
+import BranchSwitcher from './BranchSwitcher';
 
 import { 
   LayoutDashboard, 
@@ -33,10 +35,16 @@ const sidebarItems: NavItem[] = [
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const { theme, lang, toggleTheme, changeLanguage } = useApp();
+  const { branches } = useAccessibleBranches();
   const location = useLocation();
   const navigate = useNavigate();
 
   const t = translations[lang];
+
+  const isAllBranches = user?.branch_scope === 'all';
+  const activeBranchName = isAllBranches
+    ? t.common.allBranches
+    : branches.find((b) => b.id === user?.branch_id)?.name || t.common.noBranch;
 
   const handleLogout = () => {
     logout();
@@ -64,6 +72,12 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
             <span className="inline-block mt-1 text-[11px] font-bold px-2 py-0.5 bg-bee-yellow/10 text-bee-yellow rounded border border-bee-yellow/20 uppercase">
               {user?.role_name}
             </span>
+            {user && (
+              <span className="mt-2 flex items-center gap-1.5 text-[11px] font-bold px-2 py-0.5 bg-stone-800/60 text-stone-300 rounded border border-stone-700/60">
+                <Building2 size={12} className="text-honey-gold shrink-0" />
+                <span className="truncate" title={activeBranchName}>{activeBranchName}</span>
+              </span>
+            )}
           </div>
 
           {/* Nav List Mapping - Conditioned dynamically by RBAC role types */}
@@ -124,11 +138,18 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           <div>
             <h1 className="text-sm font-bold text-slate-400 dark:text-stone-500 uppercase tracking-wider">
               {location.pathname.substring(1) || 'Workspace'}
+              {user && (
+                <span className="text-honey-gold normal-case">
+                  {' '}• {activeBranchName}
+                </span>
+              )}
             </h1>
           </div>
 
           {/* Dynamic Utilities Toggles */}
           <div className="flex items-center gap-3">
+            <BranchSwitcher />
+
             <button
               onClick={() => changeLanguage(lang === 'en' ? 'ar' : 'en')}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-stone-800 text-slate-700 dark:text-stone-300 hover:bg-slate-50 dark:hover:bg-stone-800/50 cursor-pointer"

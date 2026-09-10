@@ -11,7 +11,8 @@ import {
   CheckCircle2,
   Loader2,
   ShieldAlert,
-  Inbox
+  Inbox,
+  Building2,
 } from "lucide-react";
 import type { Patient } from "../types/patients";
 
@@ -49,6 +50,10 @@ interface DashboardData {
       name: string;
       specialization: string;
     };
+    branch: {
+      id: number;
+      name: string;
+    } | null;
   }>;
 }
 
@@ -197,6 +202,12 @@ export default function Dashboard({ onNavigate = () => {} }: DashboardProps) {
                       <p className="text-xs text-slate-400">
                         {item.doctor.name} {item.doctor.specialization ? `• ${item.doctor.specialization}` : ""}
                       </p>
+                      {item.branch?.name && (
+                        <p className="text-[11px] font-medium text-slate-400 dark:text-stone-500 mt-0.5 flex items-center gap-1">
+                          <Building2 size={11} className="text-honey-gold" />
+                          {item.branch.name}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="text-right">

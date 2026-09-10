@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { useAccessibleBranches } from "../hooks/useAccessibleBranches";
 import { translations } from "../services/translations";
 import {
   Calendar,
@@ -21,6 +22,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Building2,
 } from "lucide-react";
 import DeleteModal from "../components/DeleteModal";
 import AppointmentFormModal from "../components/AppointmentFormModal";
@@ -40,15 +42,19 @@ interface Appointment {
   d_first: string;
   d_last: string;
   specialization: string;
+  branch_id: number | null;
+  branch_name: string | null;
 }
 
 export default function AppointmentsCalendar() {
   const { lang } = useApp();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const { showToast } = useToast();
+  const { branches } = useAccessibleBranches();
   const t = translations[lang];
 
   // 1. DATE STATE MANAGEMENT FOR THE CALENDAR LOOKUP
+  const [branchFilter, setBranchFilter] = useState<number | "all">("all");
   const [selectedDate, setSelectedDate] = useState<string>(
     new Date().toISOString().split("T")[0],
   );
@@ -185,16 +191,21 @@ export default function AppointmentsCalendar() {
 
   // 4. INLINE TEXT FILTER MATCHES
   const filteredAppointments = useMemo(() => {
-    if (!globalFilter.trim()) return appointments;
+    const byBranch =
+      branchFilter === "all"
+        ? appointments
+        : appointments.filter((apt) => apt.branch_id === branchFilter);
+
+    if (!globalFilter.trim()) return byBranch;
     const cleanFilter = globalFilter.toLowerCase();
-    return appointments.filter(
+    return byBranch.filter(
       (apt) =>
         `${apt.p_first} ${apt.p_last}`.toLowerCase().includes(cleanFilter) ||
         `${apt.d_first} ${apt.d_last}`.toLowerCase().includes(cleanFilter) ||
         apt.patient_number.toLowerCase().includes(cleanFilter) ||
         (apt.phone && apt.phone.includes(cleanFilter)),
     );
-  }, [appointments, globalFilter]);
+  }, [appointments, globalFilter, branchFilter]);
 
   if (selectedAppointmentId !== null) {
     return (
@@ -265,18 +276,54 @@ export default function AppointmentsCalendar() {
         </div>
 
         {/* Live Search Engine Input */}
-        <div className="lg:col-span-2 relative flex items-center">
-          <Search
-            size={18}
-            className="absolute left-3.5 rtl:right-3.5 rtl:left-auto text-slate-400"
-          />
-          <input
-            type="text"
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder={t.appointments.searchPlaceholder}
-            className="w-full pl-11 pr-4 rtl:pr-11 rtl:pl-4 py-3 bg-white dark:bg-stone-900 text-sm border border-slate-200 dark:border-stone-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all shadow-sm"
-          />
+        <div className="lg:col-span-2 relative flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search
+              size={18}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 rtl:right-3.5 rtl:left-auto text-slate-400"
+            />
+            <input
+              type="text"
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder={t.appointments.searchPlaceholder}
+              className="w-full pl-11 pr-4 rtl:pr-11 rtl:pl-4 py-3 bg-white dark:bg-stone-900 text-sm border border-slate-200 dark:border-stone-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all shadow-sm"
+            />
+          </div>
+
+          {user?.branch_scope === "all" && branches.length > 0 && (
+            <div className="relative shrink-0">
+              <Building2
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 rtl:right-3 rtl:left-auto text-slate-400"
+              />
+              <select
+                value={branchFilter}
+                onChange={(e) =>
+                  setBranchFilter(
+                    e.target.value === "all"
+                      ? "all"
+                      : Number(e.target.value),
+                  )
+                }
+                title={t.common.switchBranch}
+                className="w-48 pl-9 pr-4 rtl:pr-9 rtl:pl-4 py-3 text-sm bg-white dark:bg-stone-900 border border-slate-200 dark:border-stone-800 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all shadow-sm font-semibold cursor-pointer"
+              >
+                <option value="all" className="text-dark-hive dark:text-white bg-white dark:bg-stone-900">
+                  {t.common.allBranches}
+                </option>
+                {branches.map((b) => (
+                  <option
+                    key={b.id}
+                    value={b.id}
+                    className="text-dark-hive dark:text-white bg-white dark:bg-stone-900"
+                  >
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -419,6 +466,12 @@ export default function AppointmentsCalendar() {
                         {t.patients.thMRN}: {apt.patient_number}{" "}
                         {apt.phone ? `• ${apt.phone}` : ""}
                       </p>
+                      {apt.branch_name && (
+                        <p className="text-xs font-medium text-slate-400 dark:text-stone-500 pl-5 rtl:pr-5 rtl:pl-0 flex items-center gap-1">
+                          <Building2 size={13} className="text-honey-gold" />
+                          {apt.branch_name}
+                        </p>
+                      )}
                     </div>
 
                     {/* Staff Assigned Sub-Plate */}

@@ -4,7 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { translations } from '../services/translations';
 import { X, UserPlus, ShieldAlert, Loader2, Save } from 'lucide-react';
+import BranchSelect from './BranchSelect';
 import type { User } from '../types/users';
+import type { Branch } from '../types/branches';
 
 interface UserFormModalProps {
   isOpen: boolean;
@@ -12,9 +14,10 @@ interface UserFormModalProps {
   onSuccess: () => void;
   user?: User | null;
   roles: { id: number; name: string }[];
+  branches: Branch[];
 }
 
-export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles }: UserFormModalProps) {
+export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles, branches }: UserFormModalProps) {
   const { lang } = useApp();
   const { token } = useAuth();
   const { showToast } = useToast();
@@ -28,7 +31,8 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
     role_id: 2,
     password: '',
     confirmPassword: '',
-    is_active: 1
+    is_active: 1,
+    branch_id: ''
   });
 
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -43,7 +47,8 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
           role_id: Number(user.role_id) || 2,
           password: '',
           confirmPassword: '',
-          is_active: String(user.is_active) === 'true' || String(user.is_active) === '1' ? 1 : 0
+          is_active: String(user.is_active) === 'true' || String(user.is_active) === '1' ? 1 : 0,
+          branch_id: user.branch_id ? String(user.branch_id) : ''
         });
       } else {
         setFormData({
@@ -52,7 +57,8 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
           role_id: 2,
           password: '',
           confirmPassword: '',
-          is_active: 1
+          is_active: 1,
+          branch_id: ''
         });
       }
       setError('');
@@ -143,6 +149,7 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
 
       const payload: any = { ...formData };
       delete payload.confirmPassword;
+      payload.branch_id = payload.branch_id ? Number(payload.branch_id) : null;
 
       if (isEditMode && !payload.password) {
         delete payload.password;
@@ -276,7 +283,7 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
             </div>
           </div>
 
-          {/* role_id and is_active options block */}
+          {/* role_id, branch and is_active options block */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">{t.users.role}</label>
@@ -292,6 +299,15 @@ export default function UserFormModal({ isOpen, onClose, onSuccess, user, roles 
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">{t.users.branch}</label>
+              <BranchSelect
+                branches={branches}
+                value={formData.branch_id}
+                onChange={handleChange}
+              />
             </div>
 
             <div>

@@ -4,6 +4,7 @@ export interface User {
   email: string;           // Maps to email varchar(150)
   role_id: RoleID;          // Maps to role_id int UNSIGNED
   is_active: boolean;       // Maps to is_active tinyint(1)
+  branch_id?: number | null; // Maps to branch_id INT UNSIGNED NULL
   createdBy: number | null;// Maps to created_by bigint UNSIGNED
   createdAt: string;       // Maps to created_at timestamp
   updatedAt: string;       // Maps to updated_at timestamp

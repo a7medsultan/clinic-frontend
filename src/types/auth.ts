@@ -4,6 +4,7 @@ export interface User {
   role_name: 'admin' | 'receptionist' | 'doctor' | 'nurse';
   tenant_id: number;
   branch_id: number | null;
+  branch_scope?: 'single' | 'all';
 }
 
 export interface AuthContextType {
@@ -12,4 +13,5 @@ export interface AuthContextType {
   loading: boolean;
   login: (userData: User, jwtToken: string) => void;
   logout: () => void;
+  switchBranch: (branchId: number | null) => Promise<void>;
 }
