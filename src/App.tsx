@@ -9,26 +9,13 @@ import Users from "./pages/Users";
 import AppointmentsCalendar from "./pages/AppointmentsCalendar";
 import Doctors from "./pages/Doctors";
 import Dashboard from "./pages/Dashboard";
-//import Settings from "./pages/Settings";
+import Settings from "./pages/Settings";
+import Branches from "./pages/Branches";
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   return user ? <>{children}</> : <Navigate to="/login" replace />;
 };
-
-/* --- 💻 CLINIC MODULE WORKSPACE WORKBENCHES --- */
-
-const MockSettings = () => (
-  <div className="bg-white dark:bg-stone-900/40 border border-slate-100 dark:border-stone-800/50 rounded-xl p-6 shadow-sm">
-    <h2 className="text-xl font-bold text-dark-hive dark:text-white">
-      Global Configuration Constants
-    </h2>
-    <p className="mt-1 text-sm text-slate-500 dark:text-stone-400">
-      Tweak core frontend parameters, API timeout gateways, and reporting
-      variables.
-    </p>
-  </div>
-);
 
 /* --- 🔀 APPLICATION ROUTER SHELL --- */
 
@@ -94,7 +81,17 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <DashboardLayout>
-                  <MockSettings />
+                  <Settings />
+                </DashboardLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/branches"
+            element={
+              <ProtectedRoute>
+                <DashboardLayout>
+                  <Branches />
                 </DashboardLayout>
               </ProtectedRoute>
             }

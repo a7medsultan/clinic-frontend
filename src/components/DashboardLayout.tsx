@@ -15,7 +15,8 @@ import {
   Sun, 
   Moon, 
   Globe,
-  Stethoscope
+  Stethoscope,
+  Building2
 } from 'lucide-react';
 import type { NavItem } from '../types/navigation';
 
@@ -25,6 +26,7 @@ const sidebarItems: NavItem[] = [
   { nameKey: 'appointments', path: '/appointments', icon: CalendarDays, roles: ['admin', 'receptionist', 'doctor', 'nurse'] },
   { nameKey: 'doctors', path: '/doctors', icon: Stethoscope, roles: ['admin'] },
   { nameKey: 'users', path: '/users', icon: ShieldAlert, roles: ['admin'] },
+  { nameKey: 'branches', path: '/branches', icon: Building2, roles: ['admin'] },
   { nameKey: 'settings', path: '/settings', icon: Settings, roles: ['admin', 'receptionist', 'doctor', 'nurse'] },
 ];
 
