@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
 import { translations } from "../services/translations";
+import type { DoctorAvailabilityRow } from "../types/doctors";
 import { 
   ArrowLeft, ArrowRight, Stethoscope, Phone, Mail, Award, 
-  Calendar, Clock, ShieldAlert, Loader2, CheckCircle2, XCircle, Inbox, User
+  Calendar, Clock, ShieldAlert, Loader2, CheckCircle2, XCircle, Inbox, User, Building2
 } from "lucide-react";
 
 interface DoctorAppointment {
@@ -30,6 +31,9 @@ interface Doctor {
   email: string;
   license_number: string;
   is_active: boolean;
+  branch_ids?: number[];
+  branch_names?: string;
+  schedule?: DoctorAvailabilityRow[];
   appointments?: DoctorAppointment[];
 }
 
@@ -86,6 +90,19 @@ export default function DoctorProfile({ doctorId, onBack }: DoctorProfileProps) 
     return `${h}:${minutes} ${ampm}`;
   };
 
+  const dayName = (dow: number) => {
+    const map: Record<number, string> = {
+      1: t.doctors.daySunday,
+      2: t.doctors.dayMonday,
+      3: t.doctors.dayTuesday,
+      4: t.doctors.dayWednesday,
+      5: t.doctors.dayThursday,
+      6: t.doctors.dayFriday,
+      7: t.doctors.daySaturday,
+    };
+    return map[dow] || String(dow);
+  };
+
   if (loading) {
     return (
       <div className="py-24 flex flex-col items-center justify-center gap-3 text-slate-400">
@@ -105,6 +122,18 @@ export default function DoctorProfile({ doctorId, onBack }: DoctorProfileProps) 
   }
 
   const appointments = doctor.appointments || [];
+
+  // Group the per-branch weekly schedule rows by branch for display
+  const scheduleByBranch = (doctor.schedule || []).reduce<
+    Record<number, DoctorAvailabilityRow[]>
+  >((acc, row) => {
+    acc[row.branch_id] = acc[row.branch_id] || [];
+    acc[row.branch_id].push(row);
+    return acc;
+  }, {});
+  const branchIds = Object.keys(scheduleByBranch)
+    .map(Number)
+    .sort((a, b) => a - b);
 
   return (
     <div className="space-y-6 font-sans">
@@ -185,6 +214,59 @@ export default function DoctorProfile({ doctorId, onBack }: DoctorProfileProps) 
                 </div>
               </div> */}
             </div>
+          </div>
+
+          {/* WORKING HOURS CARD (per branch) */}
+          <div className="p-6 bg-white dark:bg-stone-900/40 border border-slate-100 dark:border-stone-800/50 rounded-2xl shadow-sm">
+            <h3 className="text-sm font-black text-dark-hive dark:text-white uppercase tracking-wider border-b border-slate-50 dark:border-stone-800 pb-3">
+              {t.doctorProfile.workingHours}
+            </h3>
+
+            {branchIds.length === 0 ? (
+              <p className="mt-3 text-xs text-slate-400 dark:text-stone-500">
+                {t.doctorProfile.noSchedule}
+              </p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {branchIds.map((branchId) => {
+                  const rows = scheduleByBranch[branchId];
+                  const branchName =
+                    rows[0]?.branch_name || `#${branchId}`;
+                  return (
+                    <div
+                      key={branchId}
+                      className="p-3 bg-slate-50/50 dark:bg-stone-900/50 rounded-xl border border-slate-100/50 dark:border-stone-800/50"
+                    >
+                      <div className="flex items-center gap-2 text-slate-800 dark:text-stone-200 font-bold text-sm mb-2">
+                        <Building2 size={14} className="text-honey-gold shrink-0" />
+                        <span className="truncate">{branchName}</span>
+                      </div>
+                      <ul className="space-y-1.5">
+                        {rows.map((row, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="font-bold text-slate-600 dark:text-stone-300">
+                              {dayName(row.day_of_week)}
+                            </span>
+                            <span className="font-mono font-semibold text-slate-500 dark:text-stone-400">
+                              {formatTime(row.start_time)} – {formatTime(row.end_time)}
+                              <span className="ml-2 text-[10px] text-slate-400 dark:text-stone-500">
+                                {t.doctorProfile.scheduleSlotDuration}: {row.slot_duration} min
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-slate-400 dark:text-stone-500">
+                  {t.doctorProfile.workingHoursHint}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

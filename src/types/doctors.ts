@@ -5,7 +5,22 @@ export interface Doctor {
   phone: number;            // Maps to phone int UNSIGNED
   specialization: string;   // Maps to specialization varchar(50)
   is_active: boolean;       // Maps to is_active tinyint(1)
+  branch_ids?: number[];    // Branch assignments (doctor_branches junction)
+  branch_names?: string;    // Human-readable branch labels (comma separated)
+  has_schedule?: boolean;   // Doctor has at least one weekly availability row (list response)
+  schedule?: DoctorAvailabilityRow[]; // Full weekly schedule (getDoctorById response only)
   createdAt: string;        // Maps to created_at timestamp
+}
+
+// One working-day rule in a doctor's weekly schedule for a single branch.
+// day_of_week uses MySQL DAYOFWEEK(): 1=Sunday .. 7=Saturday.
+export interface DoctorAvailabilityRow {
+  branch_id: number;
+  branch_name?: string; // joined branch label (getDoctorById response only)
+  day_of_week: number;
+  start_time: string; // "HH:MM"
+  end_time: string;   // "HH:MM"
+  slot_duration: number; // minutes: 15 | 30 | 45 | 60
 }
 
 // Payload for creating a new user (Post requests won't supply an ID since it auto-increments here)

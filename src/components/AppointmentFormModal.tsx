@@ -3,7 +3,9 @@ import { useApp } from "../context/AppContext";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { translations } from "../services/translations";
-import { X, CalendarPlus, ShieldAlert, Loader2, Save } from "lucide-react";
+import { X, CalendarPlus, ShieldAlert, Loader2, Save, Building2 } from "lucide-react";
+import BranchSelect from "./BranchSelect";
+import type { Branch } from "../types/branches";
 
 // Interfaces matching API response schemas
 interface Patient {
@@ -53,12 +55,23 @@ export default function AppointmentFormModal({
     appointment_time: "",
     notes: "",
     status: "scheduled",
+    branch_id: "",
   });
 
   // Dynamic dropdown state options
   const [patients, setPatients] = useState<Patient[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingOptions, setLoadingOptions] = useState<boolean>(false);
+
+  // Doctor availability (weekly slot grid) for the selected doctor + date
+  const [availability, setAvailability] = useState<{
+    configured: boolean;
+    slots: string[] | null;
+    booked: string[];
+  } | null>(null);
+  const [availabilityLoading, setAvailabilityLoading] = useState<boolean>(false);
+  const [availabilityError, setAvailabilityError] = useState<string>("");
 
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string>("");
@@ -69,6 +82,9 @@ export default function AppointmentFormModal({
     if (!target) return new Date().toISOString().split("T")[0];
     return target.includes("T") ? target.split("T")[0] : target;
   };
+
+  // Normalize "HH:MM:SS" from the API to "HH:MM" for slot matching.
+  const normalizeTimeOut = (v?: string) => (v ? String(v).slice(0, 5) : "");
 
   // Fetch Patients & Doctors when modal is opened
   useEffect(() => {
@@ -83,23 +99,28 @@ export default function AppointmentFormModal({
           ...(token && { Authorization: `Bearer ${token}` }),
         };
 
-        const [patientsRes, doctorsRes] = await Promise.all([
+        const [patientsRes, doctorsRes, branchesRes] = await Promise.all([
           fetch(`${baseUrl}/api/patients`, { headers }),
           fetch(`${baseUrl}/api/doctors`, { headers }),
+          fetch(`${baseUrl}/api/branches/access`, { headers }),
         ]);
 
-        if (!patientsRes.ok || !doctorsRes.ok) {
+        if (!patientsRes.ok || !doctorsRes.ok || !branchesRes.ok) {
           throw new Error(t.appointments.errLoadDropdowns);
         }
 
         const patientsData = await patientsRes.json();
         const doctorsData = await doctorsRes.json();
+        const branchesData = await branchesRes.json();
 
         setPatients(
           Array.isArray(patientsData) ? patientsData : patientsData.data || [],
         );
         setDoctors(
           Array.isArray(doctorsData) ? doctorsData : doctorsData.data || [],
+        );
+        setBranches(
+          Array.isArray(branchesData) ? branchesData : branchesData.data || [],
         );
       } catch (err: any) {
         setError(err.message || t.appointments.errLoadDropdownsGeneric);
@@ -110,6 +131,57 @@ export default function AppointmentFormModal({
 
     fetchDropdownData();
   }, [isOpen, token, lang]);
+
+  // Fetch the selected doctor's availability for the picked date
+  useEffect(() => {
+    if (!isOpen) return;
+
+    if (!formData.doctor_id || !formData.appointment_date || !formData.branch_id) {
+      setAvailability(null);
+      setAvailabilityLoading(false);
+      setAvailabilityError("");
+      return;
+    }
+
+    let cancelled = false;
+    const loadAvailability = async () => {
+      setAvailabilityLoading(true);
+      setAvailabilityError("");
+      try {
+        const baseUrl = import.meta.env.VITE_API_BASE_URL;
+        const headers: HeadersInit = {
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` }),
+        };
+        const res = await fetch(
+          `${baseUrl}/api/doctors/${formData.doctor_id}/availability?date=${formData.appointment_date}&branch_id=${formData.branch_id}`,
+          { headers },
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            data.message || data.error || t.appointments.availabilityError,
+          );
+        }
+        if (cancelled) return;
+        setAvailability(data.data || data);
+      } catch (err: any) {
+        if (!cancelled) {
+          setAvailability(null);
+          setAvailabilityError(
+            err.message || t.appointments.availabilityError,
+          );
+        }
+      } finally {
+        if (!cancelled) setAvailabilityLoading(false);
+      }
+    };
+
+    loadAvailability();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, formData.doctor_id, formData.appointment_date, formData.branch_id, token, lang]);
 
   // Hydrate form state parameters dynamically upon visibility changes
   useEffect(() => {
@@ -136,11 +208,19 @@ export default function AppointmentFormModal({
             appointment.appointment_date,
             selectedDate,
           ),
-          appointment_time: appointment.appointment_time || "",
+          appointment_time: normalizeTimeOut(appointment.appointment_time),
           notes: appointment.notes || "",
           status: appointment.status || "scheduled",
+          branch_id: appointment.branch_id ? String(appointment.branch_id) : "",
         });
       } else {
+        const defaultBranchId =
+          currentUser?.branch_scope === "all"
+            ? ""
+            : currentUser?.branch_id
+              ? String(currentUser.branch_id)
+              : "";
+
         setFormData({
           patient_id: "",
           doctor_id: "",
@@ -148,13 +228,29 @@ export default function AppointmentFormModal({
           appointment_time: "",
           notes: "",
           status: "scheduled",
+          branch_id: defaultBranchId,
         });
       }
       setError("");
     }
-  }, [isOpen, appointment, selectedDate]);
+  }, [isOpen, appointment, selectedDate, currentUser?.branch_id, currentUser?.branch_scope]);
 
   if (!isOpen) return null;
+
+  // Derived slot-grid state
+  const isConfigured = availability?.configured === true;
+  const slots = availability?.slots || [];
+  const bookedTimes = (availability?.booked || []).filter((bt) => {
+    if (isEditMode && appointment) {
+      return bt !== normalizeTimeOut(appointment.appointment_time);
+    }
+    return true;
+  });
+  const showSlotGrid = !!formData.doctor_id && !!formData.appointment_date && isConfigured;
+
+  const selectSlot = (time: string) => {
+    setFormData((prev) => ({ ...prev, appointment_time: time }));
+  };
 
   const handleChange = (
     e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -167,6 +263,20 @@ export default function AppointmentFormModal({
     e.preventDefault();
     setError("");
     setSubmitting(true);
+
+    // In "All Branches" mode the branch must be explicitly chosen
+    if (currentUser?.branch_scope === "all" && !formData.branch_id) {
+      setError(t.appointments.branchRequired);
+      setSubmitting(false);
+      return;
+    }
+
+    // In slot-grid mode the chosen time must be one of the doctor's slots
+    if (showSlotGrid && !slots.includes(formData.appointment_time)) {
+      setError(t.appointments.selectSlotRequired);
+      setSubmitting(false);
+      return;
+    }
 
     try {
       const baseUrl = import.meta.env.VITE_API_BASE_URL;
@@ -186,6 +296,7 @@ export default function AppointmentFormModal({
             appointment_time: formData.appointment_time,
             notes: formData.notes || null,
             status: formData.status,
+            branch_id: formData.branch_id ? Number(formData.branch_id) : null,
           }
         : {
             patient_id: Number(formData.patient_id),
@@ -193,6 +304,7 @@ export default function AppointmentFormModal({
             appointment_date: formData.appointment_date,
             appointment_time: formData.appointment_time,
             notes: formData.notes || null,
+            branch_id: formData.branch_id ? Number(formData.branch_id) : null,
           };
 
       const response = await fetch(url, {
@@ -349,8 +461,26 @@ export default function AppointmentFormModal({
             </div>
           </div>
 
+          {/* Branch selector */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">
+              {t.appointments.branch}{" "}
+              {currentUser?.branch_scope === "all" && (
+                <span className="text-rose-500">*</span>
+              )}
+            </label>
+            <div className="flex items-center gap-2">
+              <Building2 size={16} className="shrink-0 text-honey-gold" />
+              <BranchSelect
+                branches={branches}
+                value={formData.branch_id}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+
           {/* Booking Metrics Clock Target and Status parameters Row block */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">
                 {t.appointments.targetDateLabel}
@@ -360,20 +490,6 @@ export default function AppointmentFormModal({
                 name="appointment_date"
                 required
                 value={formData.appointment_date}
-                onChange={handleChange}
-                className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all text-center"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">
-                {t.appointments.timeSlotLabel}
-              </label>
-              <input
-                type="time"
-                name="appointment_time"
-                required
-                value={formData.appointment_time}
                 onChange={handleChange}
                 className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all text-center"
               />
@@ -411,6 +527,88 @@ export default function AppointmentFormModal({
                 </option>
               </select>
             </div>
+          </div>
+
+          {/* Time slot picker: slot grid for configured doctors, free-form otherwise */}
+          <div>
+            <label className="block text-xs font-bold text-slate-500 dark:text-stone-400 uppercase tracking-wider mb-1.5">
+              {t.appointments.timeSlotLabel}
+            </label>
+
+            {formData.doctor_id && formData.appointment_date && availabilityLoading ? (
+              <div className="flex items-center gap-2 p-4 bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg text-xs font-semibold text-slate-400 dark:text-stone-500">
+                <Loader2 size={15} className="animate-spin" />
+                <span>{t.appointments.slotsLoading}</span>
+              </div>
+            ) : availabilityError ? (
+              <div>
+                <p className="mb-2 text-xs font-semibold text-rose-500">
+                  {availabilityError}
+                </p>
+                <input
+                  type="time"
+                  name="appointment_time"
+                  required
+                  value={formData.appointment_time}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all text-center"
+                />
+              </div>
+            ) : showSlotGrid ? (
+              slots.length === 0 ? (
+                <p className="p-4 text-xs font-semibold text-slate-400 dark:text-stone-500 bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg">
+                  {t.appointments.noSlotsToday}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {slots.map((time) => {
+                    const isBooked = bookedTimes.includes(time);
+                    const isSelected = formData.appointment_time === time;
+                    return (
+                      <button
+                        key={time}
+                        type="button"
+                        disabled={isBooked}
+                        onClick={() => selectSlot(time)}
+                        title={isBooked ? t.appointments.slotBooked : ""}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border cursor-pointer ${
+                          isBooked
+                            ? "opacity-40 cursor-not-allowed line-through bg-slate-50 dark:bg-dark-hive/30 border-slate-200 dark:border-stone-800 text-slate-400 dark:text-stone-600"
+                            : isSelected
+                              ? "bg-bee-yellow border-honey-gold text-dark-hive shadow-sm"
+                              : "bg-slate-50 dark:bg-dark-hive/30 border-slate-200 dark:border-stone-800 text-slate-600 dark:text-stone-300 hover:border-honey-gold hover:text-honey-gold"
+                        }`}
+                      >
+                        {time}
+                      </button>
+                    );
+                  })}
+                </div>
+              )
+            ) : formData.branch_id ? (
+              <div>
+                <input
+                  type="time"
+                  name="appointment_time"
+                  required
+                  value={formData.appointment_time}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg text-dark-hive dark:text-white focus:outline-none focus:ring-2 focus:ring-honey-gold transition-all text-center"
+                />
+                {bookedTimes.includes(formData.appointment_time) && (
+                  <p className="mt-1.5 text-[11px] font-semibold text-rose-500">
+                    {t.appointments.slotBooked}
+                  </p>
+                )}
+                <p className="mt-1.5 text-[11px] text-slate-400 dark:text-stone-500">
+                  {t.appointments.freeFormHint}
+                </p>
+              </div>
+            ) : (
+              <p className="p-4 text-xs font-semibold text-slate-400 dark:text-stone-500 bg-slate-50 dark:bg-dark-hive/30 border border-slate-200 dark:border-stone-800 rounded-lg">
+                {t.appointments.selectBranchHint}
+              </p>
+            )}
           </div>
 
           {/* Clinical Session Notes textarea */}
